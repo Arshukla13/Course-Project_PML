@@ -1,0 +1,83 @@
+---
+title: "Quantitative Model for Predicting Excercise Type Based on Available Data"
+output: html_document
+---
+##Introduction    
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+
+In this project, we will use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants to predict the manner in which they did the exercise.  
+
+## Get the required packages  
+```{r,warning=FALSE,message=FALSE}
+library("caret")
+library("rpart")
+library("rpart.plot")
+library("randomForest")
+library("corrplot")
+```
+
+## Download required Data  
+```{r}
+trainUrl<-"http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl<-"http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(trainUrl, destfile="./pml-training.csv")
+download.file(testUrl, destfile="./pml-testing.csv")
+```
+## Read the Data  
+Now, that we have the required datasets, we will read these into two seperate data frames in R  
+```{r}
+trainRaw<-read.csv("./pml-training.csv")
+testRaw<-read.csv("./pml-testing.csv")
+dim(trainRaw)
+dim(testRaw)
+```  
+The training data set containes 19622 observations of 160 variables while the test data set contains 20 observations of 160 variables. 
+## Clean the Data  
+Since the final goal of this excercise is to predict the class of excercises performed by different users, we will use the testing data set to decide which variables we should use in order to predict the excercises performed by users.  
+When we look at testing data set we find that out of 160 variables only 53 variables has any data at all. Rest 107 variables has either NA's or blank values. Hence we would keep only these 53 variables in the final model building & in the training data set.  
+```{r}
+trainRaw<-trainRaw[c(8:11,37:49,60:68,84:86,102,113:124,140,151:160)]
+testRaw<-testRaw[c(8:11,37:49,60:68,84:86,102,113:124,140,151:159)]
+```  
+## Slice the Data  
+Then, we can split the cleaned training set into a pure training data set (70%) and a validation data set (30%). We will use the validation data set to conduct cross validation in future steps.  
+```{r}
+set.seed(12345)
+inTrain<-createDataPartition(trainRaw$classe,p=0.7,list=FALSE)
+trainData<-trainRaw[inTrain,]
+testData<-trainRaw[-inTrain,]
+```  
+## Data Modelling  
+We fit a predictive model for activity recognition using Random Forest algorithm because it automatically selects important variables and is robust to correlated covariates & outliers in general. We will use 5-fold cross validation when applying the algorithm.  
+```{r}
+controlRf <- trainControl(method="cv", 5)
+modelRf <- train(classe ~ ., data=trainData, method="rf", trControl=controlRf, ntree=250)
+modelRf
+```  
+Then, we estimate the performance of the model on the validation data set.  
+```{r}
+predictRf <- predict(modelRf, testData)
+confusionMatrix(testData$classe, predictRf)
+oose <- 1 - as.numeric(confusionMatrix(testData$classe, predictRf)$overall[1])
+oose
+```   
+So, the estimated accuracy of the model is 98.79% and the estimated out-of-sample error is 1.2%.  
+
+## Predicting for Test Data Set  
+Now, we apply the model to the original testing data set downloaded from the data source. We remove the problem_id column first.  
+```{r}
+result <- predict(modelRf, testRaw)
+result
+```    
+
+## Appendix: Figures  
+Tree Visualization  
+```{r}
+treeModel <- rpart(classe ~ ., data=trainData, method="class")
+prp(treeModel)
+```
+
+
+
+
